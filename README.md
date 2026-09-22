@@ -472,3 +472,68 @@ The following profiles are active:
 * **Perfil de distribución optativo:** El perfil `distribucion` permanece como opcional y requiere activación explícita mediante `-Pdistribucion`.
 
 * **Diferencia entre POM y settings:** Los perfiles del `pom.xml` modifican dependencias, plugins y la compilación/construcción (bloque `<build>`), mientras que los perfiles en `settings.xml` se limitan a propiedades y repositorios de descarga.
+
+---
+
+## Dependencias transitivas, scopes y conflictos
+
+### Práctica guiada: mediación de conflictos y dependencias transitivas
+
+Al declarar bibliotecas en el [`pom.xml`](file:///Users/fran/Documents/GitHub/gestor-tareas/pom.xml), estas pueden requerir a su vez otras dependencias (transitivas).
+
+#### Caso 1: Declaración simultánea de `commons-text` (1.12.0) y `commons-lang3` (3.14.0) como dependencias directas
+
+```console
+fran@MacBook-Air-de-Francisco gestor-tareas % mvn dependency:tree -Dverbose -Dincludes=org.apache.commons
+[INFO] com.codelearn:gestor-tareas:jar:1.0.0-SNAPSHOT
+[INFO] +- org.apache.commons:commons-text:jar:1.12.0:compile
+[INFO] |  \- (org.apache.commons:commons-lang3:jar:3.14.0:compile - omitted for duplicate)
+[INFO] \- org.apache.commons:commons-lang3:jar:3.14.0:compile
+```
+
+En este escenario, `commons-text` solicita transitivamente `commons-lang3`, pero prevalece la declaración directa a menor profundidad en el árbol de dependencias (`omitted for duplicate`).
+
+#### Caso 2: Retirando la declaración directa de `commons-lang3` (sólo `commons-text` en el `pom.xml`)
+
+```console
+fran@MacBook-Air-de-Francisco gestor-tareas % mvn dependency:tree -Dverbose -Dincludes=org.apache.commons
+[INFO] com.codelearn:gestor-tareas:jar:1.0.0-SNAPSHOT
+[INFO] \- org.apache.commons:commons-text:jar:1.12.0:compile
+[INFO]    \- org.apache.commons:commons-lang3:jar:3.14.0:compile
+```
+
+Al retirar la declaración directa de `commons-lang3`, la biblioteca llega transitivamente a través de `commons-text:1.12.0`.
+
+### Scopes de dependencias en Maven
+
+| Scope | Uso |
+| --- | --- |
+| `compile` | Disponible al compilar y ejecutar (valor predeterminado). Se propaga transitivamente. |
+| `test` | Disponible únicamente para compilar y ejecutar pruebas unitarias (`src/test`). No se empaqueta ni propaga. |
+| `provided` | Necesario para compilar, pero proporcionado por el entorno de ejecución (ej. servidor de aplicaciones). |
+| `runtime` | Necesario al ejecutar la aplicación, pero no requerido durante la compilación principal. |
+| `import` | Permite importar un BOM (*Bill of Materials*) dentro de `dependencyManagement` con `type=pom`. |
+
+### Exclusiones y comprobaciones
+
+Una exclusión se declara dentro de una dependencia para evitar que una biblioteca transitiva concreta sea introducida:
+
+```xml
+<dependency>
+  <groupId>org.apache.commons</groupId>
+  <artifactId>commons-text</artifactId>
+  <version>1.12.0</version>
+  <exclusions>
+    <exclusion>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-lang3</artifactId>
+    </exclusion>
+  </exclusions>
+</dependency>
+```
+
+### Ejercicio y conceptos clave
+
+* **Mediación de dependencias:** Maven elige la versión que está más cerca en el árbol de dependencias (menor profundidad). A igual profundidad, prevalece la primera declaración en el `pom.xml`.
+* **Exclusión responsable:** No deben agregarse exclusiones para silenciar avisos sin comprobar que el código no requiere la biblioteca excluida.
+* **Conservación del proyecto:** Tras finalizar la práctica, se retiraron las dependencias de prueba (`commons-text` y `commons-lang3`) del [`pom.xml`](file:///Users/fran/Documents/GitHub/gestor-tareas/pom.xml) para conservar únicamente **Gson**.
