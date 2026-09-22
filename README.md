@@ -202,6 +202,8 @@ Si se retira la dependencia de `pom.xml` manteniendo la importación `import com
 [INFO] ------------------------------------------------------------------------
 ```
 
+---
+
 ## Maven Central y el repositorio local
 
 ### Repositorio local y descarga de dependencias
@@ -367,3 +369,106 @@ fran@MacBook-Air-de-Francisco gestor-tareas % mvn -s config/settings-publico.xml
   
 * **¿Por qué el proyecto puede seguir descargando desde Central por defecto?**  
   Porque Maven incluye implícitamente un **Super POM** base que define por defecto el repositorio **Central** (`https://repo.maven.apache.org/maven2`) con el identificador `central` para todos los proyectos Maven, sin necesidad de declararlo explícitamente en el `pom.xml` o en el `settings.xml`.
+
+---
+
+## Profiles: activar configuraciones de Maven
+
+Declaración, activación y comprobación de perfiles sin duplicar el proyecto.
+
+### Práctica guiada: distribución opcional
+
+En el archivo [`pom.xml`](file:///Users/fran/Documents/GitHub/gestor-tareas/pom.xml), bajo `<project>`, se añadieron dos perfiles: `distribucion` (que configura `maven-shade-plugin` para empaquetar un JAR ejecutable con todas las dependencias) e `informe` (que incluye propiedades de compilación y activación por propiedad `-Dinforme=true`):
+
+```xml
+  <profiles>
+    <profile>
+      <id>distribucion</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-shade-plugin</artifactId>
+            <version>3.6.0</version>
+            <executions>
+              <execution>
+                <phase>package</phase>
+                <goals><goal>shade</goal></goals>
+                <configuration>
+                  <shadedArtifactAttached>true</shadedArtifactAttached>
+                  <shadedClassifierName>all</shadedClassifierName>
+                  <createDependencyReducedPom>false</createDependencyReducedPom>
+                  <transformers>
+                    <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                      <mainClass>com.codelearn.tareas.Main</mainClass>
+                    </transformer>
+                  </transformers>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>informe</id>
+      <activation>
+        <property>
+          <name>informe</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <properties>
+        <maven.compiler.showWarnings>true</maven.compiler.showWarnings>
+      </properties>
+    </profile>
+  </profiles>
+```
+
+### Ejecución de los builds y verificación
+
+#### 1. Build normal (`mvn clean package`)
+
+Genera únicamente el JAR (`target/gestor-tareas-1.0.0-SNAPSHOT.jar`).
+
+#### 2. Build con perfil de distribución (`mvn -Pdistribucion clean package`)
+
+Genera además el JAR ejecutable con dependencias integradas (`target/gestor-tareas-1.0.0-SNAPSHOT-all.jar`).
+
+#### 3. Ejecución del JAR autocontenido
+
+```console
+fran@MacBook-Air-de-Francisco gestor-tareas % java -jar target/gestor-tareas-1.0.0-SNAPSHOT-all.jar
+{"titulo":"Aprender Maven","completada":false}
+```
+
+#### 4. Comprobación de perfiles activos por propiedad (`mvn -Dinforme=true help:active-profiles`)
+
+```console
+fran@MacBook-Air-de-Francisco gestor-tareas % mvn -Dinforme=true help:active-profiles
+[INFO] Scanning for projects...
+[INFO] --------------------< com.codelearn:gestor-tareas >---------------------
+[INFO] Building gestor-tareas 1.0.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- help:3.5.2:active-profiles (default-cli) @ gestor-tareas ---
+[INFO] 
+Active Profiles for Project 'com.codelearn:gestor-tareas:jar:1.0.0-SNAPSHOT':
+
+The following profiles are active:
+
+ - informe (source: com.codelearn:gestor-tareas:1.0.0-SNAPSHOT)
+
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+```
+
+### Ejercicio y conceptos clave
+
+* **Activación por propiedad (`-Dinforme=true`):** Al definir el bloque `<activation><property><name>informe</name><value>true</value></property></activation>` en el perfil `informe`, este se activa automáticamente al invocar Maven con `-Dinforme=true`, apareciendo en la salida de `help:active-profiles` sin requerir el flag `-P`.
+
+* **Perfil de distribución optativo:** El perfil `distribucion` permanece como opcional y requiere activación explícita mediante `-Pdistribucion`.
+
+* **Diferencia entre POM y settings:** Los perfiles del `pom.xml` modifican dependencias, plugins y la compilación/construcción (bloque `<build>`), mientras que los perfiles en `settings.xml` se limitan a propiedades y repositorios de descarga.
